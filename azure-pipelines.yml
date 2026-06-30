@@ -2,54 +2,108 @@ trigger:
 - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: ubuntu-latest
 
-steps:
+# =========================================================
+# VARIABLES
+# =========================================================
 
-# Checkout the GitHub repository
-- checkout: self
-  fetchDepth: 1
+variables:
 
-# Display build information
-- script: |
-    echo "======================================"
-    echo "Azure DevOps Build Information"
-    echo "======================================"
-    echo "Repository : $(Build.Repository.Name)"
-    echo "Branch     : $(Build.SourceBranch)"
-    echo "Commit     : $(Build.SourceVersion)"
-    echo "Agent OS   : $(Agent.OS)"
-    echo "Working Dir: $(Build.SourcesDirectory)"
-    echo ""
-  displayName: "Display Build Information"
+  # Azure Container Registry Service Connection
+  acrServiceConnection: 'CredPay-ACR-SC'
 
-# List directory structure
-- script: |
-    echo "======================================"
-    echo "Repository Folder Structure"
-    echo "======================================"
-    pwd
-    echo ""
+  # Image Tag
+  tag: '$(Build.BuildId)'
 
-    ls -la
+  # Repositories in ACR
+  frontendRepository: 'credpay/frontend'
+  userRepository: 'credpay/user-service'
+  paymentRepository: 'credpay/payment-service'
 
-    echo ""
-    echo "Recursive Directory Listing"
-    echo "======================================"
-    find . | sort
-  displayName: "List Repository Structure"
+# =========================================================
+# STAGES
+# =========================================================
 
-# Show Git information
-- script: |
-    echo "======================================"
-    echo "Git Details"
-    echo "======================================"
+stages:
 
-    git status
-    echo ""
+# =========================================================
+# STAGE 1 - BUILD & PUSH DOCKER IMAGES
+# =========================================================
 
-    git branch
-    echo ""
+- stage: DockerBuild
+  displayName: Docker Build & Push
 
-    git log --oneline -5
-  displayName: "Verify Git Checkout"
+  jobs:
+
+  - job: BuildPushImages
+    displayName: Build Docker Images
+
+    steps:
+
+    - checkout: self
+
+    #########################################################
+    # Display Build Information
+    #########################################################
+
+    - script: |
+        echo "Repository : $(Build.Repository.Name)"
+        echo "Branch     : $(Build.SourceBranch)"
+        echo "Build ID   : $(Build.BuildId)"
+        echo "Image Tag  : $(tag)"
+      displayName: Build Information
+
+    #########################################################
+    # FRONTEND
+    #########################################################
+
+    - task: Docker@2
+      displayName: Build & Push Frontend Image
+
+      inputs:
+        command: buildAndPush
+        containerRegistry: $(acrServiceConnection)
+        repository: $(frontendRepository)
+        dockerfile: frontend-react/Dockerfile
+        buildContext: frontend-react
+
+        tags: |
+          $(tag)
+          latest
+
+    #########################################################
+    # USER SERVICE
+    #########################################################
+
+    - task: Docker@2
+      displayName: Build & Push User Service Image
+
+      inputs:
+        command: buildAndPush
+        containerRegistry: $(acrServiceConnection)
+        repository: $(userRepository)
+        dockerfile: user-service/Dockerfile
+        buildContext: user-service
+
+        tags: |
+          $(tag)
+          latest
+
+    #########################################################
+    # PAYMENT SERVICE
+    #########################################################
+
+    - task: Docker@2
+      displayName: Build & Push Payment Service Image
+
+      inputs:
+        command: buildAndPush
+        containerRegistry: $(acrServiceConnection)
+        repository: $(paymentRepository)
+        dockerfile: payment-service/Dockerfile
+        buildContext: payment-service
+
+        tags: |
+          $(tag)
+          latest
